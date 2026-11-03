@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ owner.username }}{% endblock %}
+{% block content %}
+<h2>{{ owner.username }}</h2>
+<p class="muted">{{ repos|length }} repositories</p>
+
+{% for r in repos %}
+<div class="card">
+  <a class="repo-link" href="/{{ owner.username }}/{{ r.name }}">{{ r.name }}</a>
+  <span class="badge">{{ "Private" if r.is_private else "Public" }}</span>
+  <p class="muted">{{ r.description or "No description" }}</p>
+</div>
+{% else %}
+<p class="muted">No public repositories yet.</p>
+{% endfor %}
+{% endblock %}

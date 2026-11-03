@@ -1,0 +1,9 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+<p class="crumbs">
+  <a href="/{{ username }}/{{ repo.name }}?branch={{ branch }}">{{ repo.name }}</a>
+  / {{ filepath }}
+  <span class="muted">({{ branch }}, {{ lines }} lines)</span>
+</p>
+<pre class="code">{{ content }}</pre>
+{% endblock %}

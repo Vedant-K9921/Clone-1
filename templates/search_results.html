@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+<h2>Search results for "{{ q }}"</h2>
+
+{% for r in results %}
+<div class="card">
+  <a class="repo-link" href="/{{ r.owner.username }}/{{ r.name }}">
+    {{ r.owner.username }}/{{ r.name }}
+  </a>
+  <p class="muted">{{ r.description or "No description" }}</p>
+</div>
+{% else %}
+<p class="muted">No repositories found.</p>
+{% endfor %}
+{% endblock %}

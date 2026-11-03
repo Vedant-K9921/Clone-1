@@ -1,0 +1,62 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name %}
+
+<div class="row-between">
+  <form method="get" class="inline">
+    <select name="branch" onchange="this.form.submit()">
+      {% for b in branches %}
+        <option value="{{ b }}" {% if b == branch %}selected{% endif %}>{{ b }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  <div class="inline">
+    <form method="post" action="{{ base }}/star">
+      <button class="btn secondary" type="submit">
+        {% if starred %}&#9733; Starred{% else %}&#9734; Star{% endif %} ({{ stars }})
+      </button>
+    </form>
+    {% if is_owner %}
+      <a class="btn" href="{{ base }}/add-file?branch={{ branch }}">+ Add file</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if crumbs %}
+<p class="crumbs">
+  <a href="{{ base }}?branch={{ branch }}">{{ repo.name }}</a>
+  {% for c in crumbs %}
+    / <a href="{{ base }}/tree/{{ c.path }}?branch={{ branch }}">{{ c.name }}</a>
+  {% endfor %}
+</p>
+{% endif %}
+
+{% if empty %}
+<div class="card">
+  <h3>This repository is empty</h3>
+  <p>Click <b>+ Add file</b>, or push from your computer:</p>
+  <pre>git remote add origin ./repos/{{ username }}/{{ repo.name }}.git
+git push -u origin main</pre>
+</div>
+{% else %}
+<table class="files">
+  {% for i in items %}
+  <tr>
+    <td class="icon">{% if i.type == "dir" %}&#128193;{% else %}&#128196;{% endif %}</td>
+    <td>
+      {% if i.type == "dir" %}
+        <a href="{{ base }}/tree/{{ i.path }}?branch={{ branch }}">{{ i.name }}</a>
+      {% else %}
+        <a href="{{ base }}/blob/{{ i.path }}?branch={{ branch }}">{{ i.name }}</a>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% if readme_html %}
+  <div class="readme">{{ readme_html|safe }}</div>
+{% endif %}
+{% endif %}
+{% endblock %}

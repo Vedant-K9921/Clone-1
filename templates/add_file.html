@@ -1,0 +1,17 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+<div class="form-box wide">
+  <h3>Add a file to <b>{{ branch }}</b></h3>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/{{ username }}/{{ repo.name }}/add-file">
+    <input type="hidden" name="branch" value="{{ branch }}">
+    <label>File name (use folder/name.txt to create folders)</label>
+    <input type="text" name="filename" required>
+    <label>Content</label>
+    <textarea name="content" rows="14" class="mono"></textarea>
+    <label>Commit message</label>
+    <input type="text" name="message" value="Add file">
+    <button class="btn" type="submit">Commit file</button>
+  </form>
+</div>
+{% endblock %}

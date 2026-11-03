@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}New repository{% endblock %}
+{% block content %}
+<div class="form-box">
+  <h2>Create a new repository</h2>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/repo/new">
+    <label>Repository name</label>
+    <input type="text" name="name" required>
+    <label>Description (optional)</label>
+    <input type="text" name="description">
+    <label class="check">
+      <input type="checkbox" name="is_private" value="1"> Private repository
+    </label>
+    <button class="btn" type="submit">Create repository</button>
+  </form>
+</div>
+{% endblock %}

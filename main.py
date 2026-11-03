@@ -135,3 +135,211 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=303)
     repos = db.query(models.Repository).filter_by(owner_id=user.id).all()
     return render(request, "dashboard.html", user, repos=repos)
+
+@app.get("/search", response_class=HTMLResponse)
+def search(request: Request, q: str = "", db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    results = []
+    if q.strip():
+        results = (
+            db.query(models.Repository)
+            .join(models.User)
+            .filter(models.Repository.is_private == False)  # noqa: E712
+            .filter(models.Repository.name.ilike(f"%{q}%"))
+            .all()
+        )
+    return render(request, "search_results.html", user, q=q, results=results)
+
+
+@app.get("/repo/new", response_class=HTMLResponse)
+def new_repo_page(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return render(request, "new_repo.html", user)
+
+
+@app.post("/repo/new")
+def new_repo(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    is_private: str = Form(None),
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if not git_utils.valid_name(name):
+        return render(request, "new_repo.html", user, error="Name: letters, numbers, . _ - only")
+    if db.query(models.Repository).filter_by(owner_id=user.id, name=name).first():
+        return render(
+            request, "new_repo.html", user, error="You already have a repo with that name"
+        )
+    db.add(
+        models.Repository(
+            name=name, description=description, is_private=bool(is_private), owner_id=user.id
+        )
+    )
+    db.commit()
+    git_utils.create_bare_repo(REPOS_DIR, user.username, name)
+    return RedirectResponse(f"/{user.username}/{name}", status_code=303)
+
+
+# ---------------- user profile ----------------
+@app.get("/{username}", response_class=HTMLResponse)
+def profile(request: Request, username: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    owner = db.query(models.User).filter(models.User.username == username).first()
+    if not owner:
+        return error(request, user, "User not found")
+    repos = db.query(models.Repository).filter_by(owner_id=owner.id).all()
+    if not user or user.id != owner.id:
+        repos = [r for r in repos if not r.is_private]
+    return render(request, "user_profile.html", user, owner=owner, repos=repos)
+
+
+# ---------------- code browser ----------------
+@app.get("/{username}/{repo_name}", response_class=HTMLResponse)
+def repo_home(
+    request: Request,
+    username: str,
+    repo_name: str,
+    branch: str = "main",
+    db: Session = Depends(get_db),
+):
+    return browse(request, username, repo_name, "", branch, db)
+
+
+@app.get("/{username}/{repo_name}/tree/{subpath:path}", response_class=HTMLResponse)
+def repo_tree(
+    request: Request,
+    username: str,
+    repo_name: str,
+    subpath: str,
+    branch: str = "main",
+    db: Session = Depends(get_db),
+):
+    return browse(request, username, repo_name, subpath, branch, db)
+
+
+def browse(request, username, repo_name, subpath, branch, db):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    empty = git_utils.is_repo_empty(path)
+    branch, branches = pick_branch(path, branch)
+    items = [] if empty else git_utils.get_tree(path, branch, subpath)
+    readme_html = None
+    if not subpath:
+        for item in items:
+            if item["name"].lower() == "readme.md":
+                text = git_utils.get_file_content(path, branch, item["path"])
+                if text:
+                    readme_html = markdown.markdown(text, extensions=["fenced_code"])
+    starred = bool(
+        user and db.query(models.Star).filter_by(user_id=user.id, repo_id=repo.id).first()
+    )
+    parts = subpath.split("/") if subpath else []
+    crumbs = [{"name": p, "path": "/".join(parts[: i + 1])} for i, p in enumerate(parts)]
+    return render(
+        request,
+        "repo_detail.html",
+        user,
+        repo=repo,
+        username=username,
+        items=items,
+        empty=empty,
+        branch=branch,
+        branches=branches,
+        readme_html=readme_html,
+        stars=len(repo.stars),
+        starred=starred,
+        subpath=subpath,
+        crumbs=crumbs,
+        is_owner=bool(user and user.username == username),
+        clone_url=f"{request.base_url}{username}/{repo_name}",
+    )
+
+
+@app.get("/{username}/{repo_name}/blob/{filepath:path}", response_class=HTMLResponse)
+def view_file(
+    request: Request,
+    username: str,
+    repo_name: str,
+    filepath: str,
+    branch: str = "main",
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    branch, _ = pick_branch(path, branch)
+    content = git_utils.get_file_content(path, branch, filepath)
+    if content is None:
+        return error(request, user, "File not found (or it is a binary file)")
+    return render(
+        request,
+        "file_view.html",
+        user,
+        repo=repo,
+        username=username,
+        filepath=filepath,
+        content=content,
+        branch=branch,
+        lines=content.count("\n") + 1,
+    )
+
+
+@app.get("/{username}/{repo_name}/add-file", response_class=HTMLResponse)
+def add_file_page(
+    request: Request,
+    username: str,
+    repo_name: str,
+    branch: str = "main",
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo or not user or user.username != username:
+        return error(request, user, "Only the owner can add files", 403)
+    branch, _ = pick_branch(path, branch)
+    return render(request, "add_file.html", user, repo=repo, username=username, branch=branch)
+
+
+@app.post("/{username}/{repo_name}/add-file")
+def add_file(
+    request: Request,
+    username: str,
+    repo_name: str,
+    filename: str = Form(...),
+    content: str = Form(""),
+    message: str = Form("Add file"),
+    branch: str = Form("main"),
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo or not user or user.username != username:
+        return error(request, user, "Only the owner can add files", 403)
+    filename = filename.strip().lstrip("/")
+    ok = (
+        bool(filename)
+        and git_utils.valid_name(branch)
+        and git_utils.add_file(
+            path, branch, filename, content, message or "Add file", user.username, user.email
+        )
+    )
+    if not ok:
+        return render(
+            request,
+            "add_file.html",
+            user,
+            repo=repo,
+            username=username,
+            branch=branch,
+            error="Could not save the file. Check the file name.",
+        )
+    return RedirectResponse(f"/{username}/{repo_name}?branch={branch}", status_code=303)

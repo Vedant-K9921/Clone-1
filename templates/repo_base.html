@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ username }}/{{ repo.name }}{% endblock %}
+{% block content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name %}
+
+<div class="repo-header">
+  <h1>
+    <a href="/{{ username }}">{{ username }}</a> /
+    <a href="{{ base }}">{{ repo.name }}</a>
+    <span class="badge">{{ "Private" if repo.is_private else "Public" }}</span>
+  </h1>
+  <p class="muted">{{ repo.description or "" }}</p>
+</div>
+
+<div class="tabs">
+  <a href="{{ base }}">Code</a>
+  <a href="{{ base }}/commits">Commits</a>
+  <a href="{{ base }}/branches">Branches</a>
+  <a href="{{ base }}/issues">Issues</a>
+  <a href="{{ base }}/pulls">Pull requests</a>
+  {% if user and user.id == repo.owner_id %}
+    <a href="{{ base }}/settings">Settings</a>
+  {% endif %}
+</div>
+
+{% block repo_content %}{% endblock %}
+{% endblock %}
