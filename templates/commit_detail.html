@@ -1,0 +1,10 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+<div class="card">
+  <h3>{{ c.message }}</h3>
+  <p class="muted">{{ c.author }} - {{ c.date }} - <code>{{ c.sha[:7] }}</code></p>
+</div>
+
+<pre class="diff">{% for l in c.diff %}<span class="{{ l.kind }}">{{ l.text }}</span>
+{% endfor %}</pre>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+<form method="get" class="inline">
+  <select name="branch" onchange="this.form.submit()">
+    {% for b in branches %}
+      <option value="{{ b }}" {% if b == branch %}selected{% endif %}>{{ b }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+{% for c in commits %}
+<div class="card">
+  <a href="/{{ username }}/{{ repo.name }}/commit/{{ c.sha }}"><b>{{ c.message }}</b></a>
+  <p class="muted">{{ c.author }} committed {{ c.when }} - <code>{{ c.short }}</code></p>
+</div>
+{% else %}
+<p class="muted">No commits yet.</p>
+{% endfor %}
+{% endblock %}

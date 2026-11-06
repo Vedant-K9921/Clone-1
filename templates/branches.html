@@ -1,0 +1,25 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name %}
+<h3>Branches</h3>
+
+{% for b in branches %}
+<div class="card row-between">
+  <a href="{{ base }}?branch={{ b }}">{{ b }}</a>
+  <a class="muted" href="{{ base }}/commits?branch={{ b }}">history</a>
+</div>
+{% endfor %}
+
+{% if is_owner and branches %}
+<form method="post" action="{{ base }}/branches/new" class="form-box wide">
+  <h3>Create a branch</h3>
+  <label>New branch name</label>
+  <input type="text" name="name" required>
+  <label>Create from</label>
+  <select name="from_branch">
+    {% for b in branches %}<option>{{ b }}</option>{% endfor %}
+  </select>
+  <button class="btn" type="submit">Create branch</button>
+</form>
+{% endif %}
+{% endblock %}

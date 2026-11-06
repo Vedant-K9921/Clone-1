@@ -343,3 +343,93 @@ def add_file(
             error="Could not save the file. Check the file name.",
         )
     return RedirectResponse(f"/{username}/{repo_name}?branch={branch}", status_code=303)
+
+@app.get("/{username}/{repo_name}/commits", response_class=HTMLResponse)
+def commits(
+    request: Request,
+    username: str,
+    repo_name: str,
+    branch: str = "main",
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    branch, branches = pick_branch(path, branch)
+    return render(
+        request,
+        "commits.html",
+        user,
+        repo=repo,
+        username=username,
+        branch=branch,
+        branches=branches,
+        commits=git_utils.get_commits(path, branch),
+    )
+
+
+@app.get("/{username}/{repo_name}/commit/{sha}", response_class=HTMLResponse)
+def commit_detail(
+    request: Request, username: str, repo_name: str, sha: str, db: Session = Depends(get_db)
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    details = git_utils.get_commit_details(path, sha) if sha.isalnum() else None
+    if not details:
+        return error(request, user, "Commit not found")
+    return render(request, "commit_detail.html", user, repo=repo, username=username, c=details)
+
+
+@app.get("/{username}/{repo_name}/branches", response_class=HTMLResponse)
+def branches_page(request: Request, username: str, repo_name: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    return render(
+        request,
+        "branches.html",
+        user,
+        repo=repo,
+        username=username,
+        branches=git_utils.get_branches(path),
+        is_owner=bool(user and user.username == username),
+    )
+
+
+@app.post("/{username}/{repo_name}/branches/new")
+def new_branch(
+    request: Request,
+    username: str,
+    repo_name: str,
+    name: str = Form(...),
+    from_branch: str = Form("main"),
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo or not user or user.username != username:
+        return error(request, user, "Only the owner can create branches", 403)
+    if git_utils.valid_name(name):
+        git_utils.create_branch(path, name, from_branch)
+    return RedirectResponse(f"/{username}/{repo_name}/branches", status_code=303)
+
+
+# ---------------- stars ----------------
+@app.post("/{username}/{repo_name}/star")
+def toggle_star(request: Request, username: str, repo_name: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if repo:
+        star = db.query(models.Star).filter_by(user_id=user.id, repo_id=repo.id).first()
+        if star:
+            db.delete(star)
+        else:
+            db.add(models.Star(user_id=user.id, repo_id=repo.id))
+        db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}", status_code=303)
