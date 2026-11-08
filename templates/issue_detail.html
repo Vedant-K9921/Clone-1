@@ -1,0 +1,37 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name ~ "/issues/" ~ issue.id %}
+
+<div class="card">
+  <h3>
+    #{{ issue.id }} {{ issue.title }}
+    <span class="badge {{ issue.status|lower }}">{{ issue.status }}</span>
+  </h3>
+  <p class="muted">opened by {{ issue.author.username }}</p>
+  <p>{{ issue.description or "" }}</p>
+</div>
+
+<h4>Comments</h4>
+{% for c in issue.comments %}
+<div class="card">
+  <b>{{ c.author.username }}</b>
+  <span class="muted">{{ c.created_at.strftime("%d %b %Y %H:%M") }}</span>
+  <p>{{ c.content }}</p>
+</div>
+{% else %}
+<p class="muted">No comments yet.</p>
+{% endfor %}
+
+{% if user %}
+<form method="post" action="{{ base }}/comment" class="form-box wide">
+  <textarea name="content" rows="4" required placeholder="Write a comment..."></textarea>
+  <button class="btn" type="submit">Comment</button>
+</form>
+
+<form method="post" action="{{ base }}/toggle">
+  <button class="btn secondary" type="submit">
+    {% if issue.status == "Open" %}Close issue{% else %}Reopen issue{% endif %}
+  </button>
+</form>
+{% endif %}
+{% endblock %}

@@ -433,3 +433,106 @@ def toggle_star(request: Request, username: str, repo_name: str, db: Session = D
             db.add(models.Star(user_id=user.id, repo_id=repo.id))
         db.commit()
     return RedirectResponse(f"/{username}/{repo_name}", status_code=303)
+
+# ---------------- issues ----------------
+@app.get("/{username}/{repo_name}/issues", response_class=HTMLResponse)
+def issues(
+    request: Request,
+    username: str,
+    repo_name: str,
+    state: str = "Open",
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    state = "Closed" if state.lower() == "closed" else "Open"
+    items = (
+        db.query(models.Issue)
+        .filter_by(repo_id=repo.id, status=state)
+        .order_by(models.Issue.id.desc())
+        .all()
+    )
+    return render(
+        request, "issues.html", user, repo=repo, username=username, issues=items, state=state
+    )
+
+
+@app.get("/{username}/{repo_name}/issues/new", response_class=HTMLResponse)
+def new_issue_page(request: Request, username: str, repo_name: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return render(request, "new_issue.html", user, repo=repo, username=username)
+
+
+@app.post("/{username}/{repo_name}/issues/new")
+def new_issue(
+    request: Request,
+    username: str,
+    repo_name: str,
+    title: str = Form(...),
+    description: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo or not user:
+        return RedirectResponse("/login", status_code=303)
+    issue = models.Issue(title=title, description=description, repo_id=repo.id, author_id=user.id)
+    db.add(issue)
+    db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}/issues/{issue.id}", status_code=303)
+
+
+@app.get("/{username}/{repo_name}/issues/{issue_id}", response_class=HTMLResponse)
+def issue_detail(
+    request: Request, username: str, repo_name: str, issue_id: int, db: Session = Depends(get_db)
+):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    issue = db.query(models.Issue).filter_by(id=issue_id, repo_id=repo.id).first()
+    if not issue:
+        return error(request, user, "Issue not found")
+    return render(request, "issue_detail.html", user, repo=repo, username=username, issue=issue)
+
+
+@app.post("/{username}/{repo_name}/issues/{issue_id}/comment")
+def comment(
+    request: Request,
+    username: str,
+    repo_name: str,
+    issue_id: int,
+    content: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo or not user:
+        return RedirectResponse("/login", status_code=303)
+    issue = db.query(models.Issue).filter_by(id=issue_id, repo_id=repo.id).first()
+    if issue and content.strip():
+        db.add(models.Comment(content=content, issue_id=issue.id, author_id=user.id))
+        db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}/issues/{issue_id}", status_code=303)
+
+
+@app.post("/{username}/{repo_name}/issues/{issue_id}/toggle")
+def toggle_issue(
+    request: Request, username: str, repo_name: str, issue_id: int, db: Session = Depends(get_db)
+):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo or not user:
+        return RedirectResponse("/login", status_code=303)
+    issue = db.query(models.Issue).filter_by(id=issue_id, repo_id=repo.id).first()
+    if issue and (user.id in (issue.author_id, repo.owner_id)):
+        issue.status = "Closed" if issue.status == "Open" else "Open"
+        db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}/issues/{issue_id}", status_code=303)

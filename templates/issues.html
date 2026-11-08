@@ -1,0 +1,20 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name %}
+<div class="row-between">
+  <div class="inline">
+    <a href="?state=Open" {% if state == "Open" %}class="active"{% endif %}>Open</a>
+    <a href="?state=Closed" {% if state == "Closed" %}class="active"{% endif %}>Closed</a>
+  </div>
+  <a class="btn" href="{{ base }}/issues/new">New issue</a>
+</div>
+
+{% for i in issues %}
+<div class="card">
+  <a href="{{ base }}/issues/{{ i.id }}"><b>#{{ i.id }} {{ i.title }}</b></a>
+  <p class="muted">opened by {{ i.author.username }}</p>
+</div>
+{% else %}
+<p class="muted">No {{ state|lower }} issues.</p>
+{% endfor %}
+{% endblock %}
