@@ -1,0 +1,41 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name ~ "/pull/" ~ pr.id %}
+
+<div class="card">
+  <h3>
+    #{{ pr.id }} {{ pr.title }}
+    <span class="badge {{ pr.status|lower }}">{{ pr.status }}</span>
+  </h3>
+  <p class="muted">
+    {{ pr.author.username }} wants to merge
+    <code>{{ pr.source_branch }}</code> into <code>{{ pr.target_branch }}</code>
+  </p>
+  <p>{{ pr.description or "" }}</p>
+</div>
+
+{% if pr.status == "Open" %}
+  {% if mergeable %}
+    <div class="ok">No conflicts. This branch can be merged.</div>
+  {% else %}
+    <div class="alert">This branch has conflicts with the target branch.</div>
+  {% endif %}
+
+  {% if is_owner %}
+  <div class="inline">
+    {% if mergeable %}
+    <form method="post" action="{{ base }}/merge">
+      <button class="btn" type="submit">Merge pull request</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ base }}/close">
+      <button class="btn secondary" type="submit">Close</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <h4>Changes</h4>
+  <pre class="diff">{% for l in diff %}<span class="{{ l.kind }}">{{ l.text }}</span>
+{% endfor %}</pre>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+<div class="form-box wide">
+  <h3>Open a pull request</h3>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/{{ username }}/{{ repo.name }}/pull/new">
+    <label>Merge this branch (source)</label>
+    <select name="source_branch">
+      {% for b in branches %}<option>{{ b }}</option>{% endfor %}
+    </select>
+
+    <label>Into this branch (target)</label>
+    <select name="target_branch">
+      {% for b in branches %}
+        <option {% if b == "main" %}selected{% endif %}>{{ b }}</option>
+      {% endfor %}
+    </select>
+
+    <label>Title</label>
+    <input type="text" name="title" required>
+    <label>Description</label>
+    <textarea name="description" rows="5"></textarea>
+    <button class="btn" type="submit">Create pull request</button>
+  </form>
+</div>
+{% endblock %}

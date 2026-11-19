@@ -1,0 +1,20 @@
+{% extends "repo_base.html" %}
+{% block repo_content %}
+{% set base = "/" ~ username ~ "/" ~ repo.name %}
+<div class="row-between">
+  <h3>Pull requests</h3>
+  <a class="btn" href="{{ base }}/pull/new">New pull request</a>
+</div>
+
+{% for p in pulls %}
+<div class="card">
+  <a href="{{ base }}/pull/{{ p.id }}"><b>#{{ p.id }} {{ p.title }}</b></a>
+  <span class="badge {{ p.status|lower }}">{{ p.status }}</span>
+  <p class="muted">
+    {{ p.source_branch }} &rarr; {{ p.target_branch }} by {{ p.author.username }}
+  </p>
+</div>
+{% else %}
+<p class="muted">No pull requests yet.</p>
+{% endfor %}
+{% endblock %}

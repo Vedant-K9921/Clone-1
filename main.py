@@ -536,3 +536,140 @@ def toggle_issue(
         issue.status = "Closed" if issue.status == "Open" else "Open"
         db.commit()
     return RedirectResponse(f"/{username}/{repo_name}/issues/{issue_id}", status_code=303)
+
+# ---------------- pull requests ----------------
+@app.get("/{username}/{repo_name}/pulls", response_class=HTMLResponse)
+def pulls(request: Request, username: str, repo_name: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    items = (
+        db.query(models.PullRequest)
+        .filter_by(repo_id=repo.id)
+        .order_by(models.PullRequest.id.desc())
+        .all()
+    )
+    return render(request, "pulls.html", user, repo=repo, username=username, pulls=items)
+
+
+@app.get("/{username}/{repo_name}/pull/new", response_class=HTMLResponse)
+def new_pull_page(request: Request, username: str, repo_name: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return render(
+        request,
+        "new_pull.html",
+        user,
+        repo=repo,
+        username=username,
+        branches=git_utils.get_branches(path),
+    )
+
+
+@app.post("/{username}/{repo_name}/pull/new")
+def new_pull(
+    request: Request,
+    username: str,
+    repo_name: str,
+    title: str = Form(...),
+    description: str = Form(""),
+    source_branch: str = Form(...),
+    target_branch: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo or not user:
+        return RedirectResponse("/login", status_code=303)
+    branches = git_utils.get_branches(path)
+    if (
+        source_branch == target_branch
+        or source_branch not in branches
+        or target_branch not in branches
+    ):
+        return render(
+            request,
+            "new_pull.html",
+            user,
+            repo=repo,
+            username=username,
+            branches=branches,
+            error="Pick two different, existing branches",
+        )
+    pr = models.PullRequest(
+        title=title,
+        description=description,
+        source_branch=source_branch,
+        target_branch=target_branch,
+        repo_id=repo.id,
+        author_id=user.id,
+    )
+    db.add(pr)
+    db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}/pull/{pr.id}", status_code=303)
+
+
+@app.get("/{username}/{repo_name}/pull/{pr_id}", response_class=HTMLResponse)
+def pull_detail(
+    request: Request, username: str, repo_name: str, pr_id: int, db: Session = Depends(get_db)
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo:
+        return error(request, user, "Repository not found")
+    pr = db.query(models.PullRequest).filter_by(id=pr_id, repo_id=repo.id).first()
+    if not pr:
+        return error(request, user, "Pull request not found")
+    diff, mergeable = [], None
+    if pr.status == "Open":
+        diff = git_utils.get_branch_diff(path, pr.target_branch, pr.source_branch)
+        mergeable = git_utils.can_merge(path, pr.target_branch, pr.source_branch)
+    return render(
+        request,
+        "pull_detail.html",
+        user,
+        repo=repo,
+        username=username,
+        pr=pr,
+        diff=diff,
+        mergeable=mergeable,
+        is_owner=bool(user and user.id == repo.owner_id),
+    )
+
+
+@app.post("/{username}/{repo_name}/pull/{pr_id}/merge")
+def merge_pull(
+    request: Request, username: str, repo_name: str, pr_id: int, db: Session = Depends(get_db)
+):
+    user = auth.get_current_user(request, db)
+    repo, path = load_repo(db, username, repo_name, user)
+    if not repo or not user or user.id != repo.owner_id:
+        return error(request, user, "Only the repo owner can merge", 403)
+    pr = db.query(models.PullRequest).filter_by(id=pr_id, repo_id=repo.id).first()
+    if pr and pr.status == "Open":
+        if git_utils.merge_branches(
+            path, pr.target_branch, pr.source_branch, user.username, user.email
+        ):
+            pr.status = "Merged"
+            db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}/pull/{pr_id}", status_code=303)
+
+
+@app.post("/{username}/{repo_name}/pull/{pr_id}/close")
+def close_pull(
+    request: Request, username: str, repo_name: str, pr_id: int, db: Session = Depends(get_db)
+):
+    user = auth.get_current_user(request, db)
+    repo, _ = load_repo(db, username, repo_name, user)
+    if not repo or not user or user.id != repo.owner_id:
+        return error(request, user, "Only the repo owner can close", 403)
+    pr = db.query(models.PullRequest).filter_by(id=pr_id, repo_id=repo.id).first()
+    if pr and pr.status == "Open":
+        pr.status = "Closed"
+        db.commit()
+    return RedirectResponse(f"/{username}/{repo_name}/pull/{pr_id}", status_code=303)
